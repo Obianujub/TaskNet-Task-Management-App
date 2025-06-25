@@ -15,6 +15,8 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
@@ -32,19 +34,47 @@ const Dashboard: React.FC = () => {
   const handleAddTask = async () => {
     try {
       await api.post("/task/add-task", { title, description });
-      setTitle("");
-      setDescription("");
       await fetchTask();
-      setIsModalOpen(false);
+      closeModal();
     } catch (err) {
       if (axios.isAxiosError(err)) setError(err.response?.data?.message);
     }
   };
 
+  const handleUpdateTask = async () => {
+    try {
+      await api.put(`/task/update-task/${editTaskId}`, { title, description });
+      setTasks((prev) =>
+        prev.map((t) =>
+          t._id === editTaskId ? { ...t, title, description } : t
+        )
+      );
+      closeModal();
+    } catch (err) {
+      if (axios.isAxiosError(err)) setError(err.response?.data?.message);
+    }
+  };
+
+  const openUpdateModal = (task: Task) => {
+    setIsEditMode(true);
+    setEditTaskId(task._id);
+    setTitle(task.title);
+    setDescription(task.description);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setIsEditMode(false);
+    setEditTaskId(null);
+    setTitle("");
+    setDescription("");
+  };
+
   const markAsCompleted = async (id: string) => {
     try {
       await api.put(`/task/update-task/${id}`);
-      fetchTask();
+      await fetchTask();
     } catch (err) {
       if (axios.isAxiosError(err)) setError(err.response?.data?.message);
     }
@@ -53,7 +83,7 @@ const Dashboard: React.FC = () => {
   const deleteTask = async (id: string) => {
     try {
       await api.delete(`/task/delete-task/${id}`);
-      fetchTask();
+      setTasks((prev) => prev.filter((t) => t._id !== id)); // Update state immutably :contentReference[oaicite:2]{index=2}
     } catch (err) {
       if (axios.isAxiosError(err)) setError(err.response?.data?.message);
     }
@@ -69,31 +99,26 @@ const Dashboard: React.FC = () => {
       navigate("/login");
       return;
     }
-    const load = async () => {
-      await fetchTask();
-    };
-    load();
+    fetchTask();
   }, [navigate]);
 
   return (
     <div className="flex min-h-screen bg-sky-50 dark:bg-slate-900">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-64 bg-gradient-to-b from-teal-600 to-violet-700 text-white shadow-lg md:relative z-20">
-        <div className="p-6 flex flex-col justify-between h-full">
-          <h1 className="text-3xl font-bold mb-8">✔️Task Net</h1>
-          <button
-            onClick={() => setFilter("ongoing")}
-            className="w-full text-left hover:text-teal-200"
-          >
-            Tasks
-          </button>
-          <button
-            onClick={logout}
-            className="mt-auto text-teal-200 hover:text-white"
-          >
-            Logout
-          </button>
-        </div>
+      <aside className="fixed inset-y-0 left-0 w-64 bg-gradient-to-b from-teal-600 to-violet-700 text-white shadow-lg md:relative z-20 p-6 flex flex-col justify-between">
+        <h1 className="text-3xl font-bold mb-8">✔️Task Net</h1>
+        <button
+          onClick={() => setFilter("ongoing")}
+          className="text-left hover:text-teal-200"
+        >
+          Tasks
+        </button>
+        <button
+          onClick={logout}
+          className="mt-auto text-teal-200 hover:text-white"
+        >
+          Logout
+        </button>
       </aside>
 
       {/* Main Content */}
@@ -114,7 +139,7 @@ const Dashboard: React.FC = () => {
           {["ongoing", "Completed"].map((s) => (
             <button
               key={s}
-              onClick={() => setFilter(s as "ongoing" | "Completed")}
+              onClick={() => setFilter(s as any)}
               className={`flex-1 text-center py-3 rounded-lg ${
                 filter === s
                   ? s === "ongoing"
@@ -149,7 +174,7 @@ const Dashboard: React.FC = () => {
                     {task.description}
                   </p>
                 </div>
-                <div className="mt-4 flex justify-between items-center">
+                <div className="mt-4 flex flex-wrap justify-between items-center gap-2">
                   <span
                     className={`px-3 py-1 text-sm font-medium rounded-full ${
                       task.state === "Completed"
@@ -159,7 +184,7 @@ const Dashboard: React.FC = () => {
                   >
                     {task.state}
                   </span>
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap gap-2">
                     {task.state === "ongoing" && (
                       <button
                         onClick={() => markAsCompleted(task._id)}
@@ -168,6 +193,12 @@ const Dashboard: React.FC = () => {
                         ✅
                       </button>
                     )}
+                    <button
+                      onClick={() => openUpdateModal(task)}
+                      className="bg-cyan-500 hover:bg-cyan-600 text-white font-medium py-2 px-3 rounded-lg transition-shadow shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    >
+                      ✏️ Edit
+                    </button>
                     <button
                       onClick={() => deleteTask(task._id)}
                       className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition"
@@ -181,12 +212,12 @@ const Dashboard: React.FC = () => {
         </div>
       </main>
 
-      {/* Add Task Modal */}
+      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-11/12 max-w-md p-6">
             <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">
-              Add New Task
+              {isEditMode ? "Edit Task" : "Add New Task"}
             </h3>
             <input
               type="text"
@@ -197,22 +228,22 @@ const Dashboard: React.FC = () => {
             />
             <textarea
               placeholder="Description"
-              className="w-full mb-4 p-3 border border-slate-300 resize-none dark:border-slate-700 rounded-lg bg-sky-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              className="w-full mb-4 p-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-sky-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
             <div className="flex justify-end space-x-3">
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 className="px-4 py-2 bg-slate-300 dark:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-400 transition"
               >
                 Cancel
               </button>
               <button
-                onClick={handleAddTask}
+                onClick={isEditMode ? handleUpdateTask : handleAddTask}
                 className="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg transition"
               >
-                Add
+                {isEditMode ? "Save Changes" : "Add"}
               </button>
             </div>
           </div>
