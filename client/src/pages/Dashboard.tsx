@@ -1,145 +1,223 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { getToken, logout } from "../auth";
+import { useEffect, useState } from "react";
 import api from "../utility/api";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
-interface TaskType {
+interface Task {
   _id: string;
   title: string;
-  completed: boolean;
+  description: string;
+  state: string;
+  createdAt: string;
 }
 
 const Dashboard: React.FC = () => {
-  const isAuthenticated = !!getToken();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<TaskType[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"ongoing" | "Completed">("ongoing");
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
+  const fetchTask = async () => {
+    try {
+      const res = await api.get("/task/all-tasks");
+      setTasks(res.data.tasks);
+    } catch (err) {
+      if (axios.isAxiosError(err)) setError(err.response?.data?.message);
+    }
+  };
 
-        const res = await api.get("/tasks", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+  const handleAddTask = async () => {
+    try {
+      await api.post("/task/add-task", { title, description });
+      setTitle("");
+      setDescription("");
+      await fetchTask();
+      setIsModalOpen(false);
+    } catch (err) {
+      if (axios.isAxiosError(err)) setError(err.response?.data?.message);
+    }
+  };
 
-        setTasks(res.data.tasks || []);
-      } catch (err) {
-        console.error("Failed to fetch tasks:", err);
-        setTasks([]);
-      }
-    };
+  const markAsCompleted = async (id: string) => {
+    try {
+      await api.put(`/task/update-task/${id}`);
+      fetchTask();
+    } catch (err) {
+      if (axios.isAxiosError(err)) setError(err.response?.data?.message);
+    }
+  };
 
-    fetchTasks();
-  }, []);
+  const deleteTask = async (id: string) => {
+    try {
+      await api.delete(`/task/delete-task/${id}`);
+      fetchTask();
+    } catch (err) {
+      if (axios.isAxiosError(err)) setError(err.response?.data?.message);
+    }
+  };
 
-  const handleLogout = () => {
-    logout();
+  const logout = () => {
+    localStorage.removeItem("token");
     navigate("/login");
   };
 
-  const completedTasks = (tasks || []).filter((task) => task.completed);
-  const pendingTasks = (tasks || []).filter((task) => !task.completed);
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      navigate("/login");
+      return;
+    }
+    const load = async () => {
+      await fetchTask();
+    };
+    load();
+  }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-fuchsia-100 via-white to-sky-100">
-      <nav className="bg-white/30 backdrop-blur-md border-b border-white/20 shadow-md p-4 px-6 flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0 sticky top-0 z-50">
-        <h1 className="text-2xl font-bold text-indigo-700">
-          <Link to="/">TaskNet</Link>
-        </h1>
-        <div className="flex flex-wrap gap-2 sm:space-x-4 text-sm font-medium justify-center">
-          <Link
-            to="/"
-            className="text-gray-700 hover:text-indigo-600 transition"
+    <div className="flex min-h-screen bg-sky-50 dark:bg-slate-900">
+      {/* Sidebar */}
+      <aside className="fixed inset-y-0 left-0 w-64 bg-gradient-to-b from-teal-600 to-violet-700 text-white shadow-lg md:relative z-20">
+        <div className="p-6 flex flex-col justify-between h-full">
+          <h1 className="text-3xl font-bold mb-8">✔️Task Net</h1>
+          <button
+            onClick={() => setFilter("ongoing")}
+            className="w-full text-left hover:text-teal-200"
           >
-            Home
-          </Link>
-
-          {isAuthenticated ? (
-            <>
-              <Link
-                to="/dashboard"
-                className="text-gray-700 hover:text-indigo-600 transition"
-              >
-                Dashboard
-              </Link>
-              <span className="text-gray-500">
-                ({completedTasks.length} completed)
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full transition"
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="text-gray-700 hover:text-indigo-600 transition"
-              >
-                Login
-              </Link>
-              <Link
-                to="/register"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full transition"
-              >
-                Register
-              </Link>
-            </>
-          )}
+            Tasks
+          </button>
+          <button
+            onClick={logout}
+            className="mt-auto text-teal-200 hover:text-white"
+          >
+            Logout
+          </button>
         </div>
-      </nav>
+      </aside>
 
-      <main className="py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-indigo-700 mb-8">
-          Welcome to Your Task Dashboard
-        </h2>
+      {/* Main Content */}
+      <main className="flex-1 ml-0 md:ml-64 p-8">
+        <header className="flex flex-col sm:flex-row justify-between items-center mb-6">
+          <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-4 sm:mb-0">
+            My Tasks
+          </h2>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-teal-500 hover:bg-teal-600 text-white px-5 py-2 rounded-lg transition"
+          >
+            Add Task
+          </button>
+        </header>
 
-        <div className="grid gap-8 md:grid-cols-2">
-          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg p-6 border border-white/30">
-            <h3 className="text-xl font-semibold text-gray-700 mb-4">
-              Pending Tasks
-            </h3>
-            <ul className="space-y-2">
-              {pendingTasks.length === 0 ? (
-                <li className="text-gray-500 italic">No pending tasks</li>
-              ) : (
-                pendingTasks.map((task) => (
-                  <li
-                    key={task._id}
-                    className="p-3 bg-white rounded-lg shadow border border-gray-200 text-sm"
-                  >
+        <div className="flex overflow-x-auto mb-6 space-x-4">
+          {["ongoing", "Completed"].map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s as "ongoing" | "Completed")}
+              className={`flex-1 text-center py-3 rounded-lg ${
+                filter === s
+                  ? s === "ongoing"
+                    ? "bg-amber-500 text-white"
+                    : "bg-green-500 text-white"
+                  : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+              }`}
+            >
+              {s === "ongoing" ? "Ongoing Tasks" : "Completed Tasks"}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-red-600 mb-4">{error}</p>}
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {tasks
+            .filter((t) => t.state === filter)
+            .map((task) => (
+              <div
+                key={task._id}
+                className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col justify-between"
+              >
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">
                     {task.title}
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg p-6 border border-white/30">
-            <h3 className="text-xl font-semibold text-gray-700 mb-4">
-              Completed Tasks
-            </h3>
-            <ul className="space-y-2">
-              {completedTasks.length === 0 ? (
-                <li className="text-gray-500 italic">No completed tasks</li>
-              ) : (
-                completedTasks.map((task) => (
-                  <li
-                    key={task._id}
-                    className="p-3 bg-green-100 text-green-800 rounded-lg shadow border border-green-200 text-sm"
+                  </h3>
+                  <p className="text-xs italic text-slate-500 dark:text-slate-400 mb-2">
+                    {new Date(task.createdAt).toLocaleDateString()}
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300 line-clamp-2">
+                    {task.description}
+                  </p>
+                </div>
+                <div className="mt-4 flex justify-between items-center">
+                  <span
+                    className={`px-3 py-1 text-sm font-medium rounded-full ${
+                      task.state === "Completed"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
                   >
-                    {task.title}
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
+                    {task.state}
+                  </span>
+                  <div className="flex space-x-2">
+                    {task.state === "ongoing" && (
+                      <button
+                        onClick={() => markAsCompleted(task._id)}
+                        className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-full transition"
+                      >
+                        ✅
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteTask(task._id)}
+                      className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
         </div>
       </main>
+
+      {/* Add Task Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-11/12 max-w-md p-6">
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">
+              Add New Task
+            </h3>
+            <input
+              type="text"
+              placeholder="Title"
+              className="w-full mb-3 p-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-sky-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <textarea
+              placeholder="Description"
+              className="w-full mb-4 p-3 border border-slate-300 resize-none dark:border-slate-700 rounded-lg bg-sky-50 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-slate-300 dark:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-400 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddTask}
+                className="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg transition"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
