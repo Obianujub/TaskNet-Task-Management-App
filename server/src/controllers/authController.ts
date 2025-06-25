@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
-import { CustomRequest, LoginBody, SignUpBody } from "../types/authTypes";
+import { CustomRequest, LoginBody, RegisterBody } from "../types/authTypes";
 import User from "../models/userModel";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-export const signup = async (
-  req: Request<{}, {}, SignUpBody>,
+export const register = async (
+  req: Request<{}, {}, RegisterBody>,
   res: Response
 ) => {
   try {

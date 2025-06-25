@@ -1,11 +1,11 @@
 import express, { Router, RequestHandler } from "express";
-import { checkAuth, login, signup } from "../controllers/authController";
-import { verifyToken } from "../middleware/verifyTokens";
+import { checkAuth, login, register } from "../controllers/authController";
+import { verifyToken } from "../middleware/verifyToken";
 
 const router: Router = express.Router();
 
 router.post("/login", login as RequestHandler);
-router.post("/signup", signup as RequestHandler);
+router.post("/register", register as RequestHandler);
 router.post(
   "/checkAuth",
   verifyToken as RequestHandler,

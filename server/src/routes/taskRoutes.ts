@@ -1,5 +1,5 @@
 import express, { Router, RequestHandler } from "express";
-import { verifyToken } from "../middleware/verifyTokens";
+import { verifyToken } from "../middleware/verifyToken";
 import {
   addTask,
   getAllTasks,

@@ -1,6 +1,6 @@
 import { Request } from "express";
 
-export interface SignUpBody {
+export interface RegisterBody {
   firstName: string;
   lastName: string;
   email: string;
